@@ -2,7 +2,7 @@
 
 This repository is for sample training code for NodeJS
 
-** HelloWorld API **
+# HelloWorld API
 - Added API for /hello
 - User can also pass their name as query string
 
