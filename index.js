@@ -13,39 +13,61 @@ var file  = require('fs');
 var environment = require('./config');
 var url = require('url');
 var StringDecoder = require('string_decoder').StringDecoder;
+const os = require('os');
+const cluster = require('cluster');
 
-// Create HTTP server
-var httpServer = http.createServer(function(request, response) {
-    handleRequest(request, response);
-});
+// init the servers
+const init = () => {
 
-// Server can start listening now
-httpServer.listen(environment.httpPort, function() {
-  console.log('Server listening on port: ' + environment.httpPort + " ENV "
-                                           + environment.envMode);
-  console.log('Usage: /hello \nThis shall return generic message\n');
-  console.log('Usage: /hello?name=<<your name>> \n' +
-   'This shall return a special message only for you!\n');
-   console.log('In case you are curious about my health, don\'t forget to /ping');
-});
+  if (cluster.isMaster) {
+    console.log(`Master ${process.pid} is running`);
 
-// create configuration for HTTPS
-var httpsCertificateConfig = {
-  'key': file.readFileSync('./certs/key.pem'),
-  'cert': file.readFileSync('./certs/cert.pem')
+    // Fork workers.
+    for (let i = 0; i < os.cpus().length; i++) {
+      cluster.fork();
+    }
+
+    cluster.on('exit', (worker, code, signal) => {
+      console.log(`worker ${worker.process.pid} died`);
+    });
+  } else {
+      // Create HTTP server
+      var httpServer = http.createServer(function(request, response) {
+          handleRequest(request, response);
+      });
+
+      // Server can start listening now
+      httpServer.listen(environment.httpPort, function() {
+        console.log('Server listening on port: ' + environment.httpPort + " ENV "
+                                                 + environment.envMode);
+        console.log('Usage: /hello \nThis shall return generic message\n');
+        console.log('Usage: /hello?name=<<your name>> \n' +
+         'This shall return a special message only for you!\n');
+         console.log('In case you are curious about my health, don\'t forget to /ping');
+      });
+
+      // create configuration for HTTPS
+      var httpsCertificateConfig = {
+        'key': file.readFileSync('./certs/key.pem'),
+        'cert': file.readFileSync('./certs/cert.pem')
+      };
+
+      // create https Server
+      var httpsServer = https.createServer(httpsCertificateConfig,
+        function(request, response) {
+          handleRequest(request, response);
+        });
+
+      // start listening https Server
+      httpsServer.listen(environment.httpsPort, function() {
+        console.log('Server listening on port: ' + environment.httpsPort + " ENV "
+                                                 + environment.envMode);
+      });
+    }
 };
 
-// create https Server
-var httpsServer = https.createServer(httpsCertificateConfig,
-  function(request, response) {
-    handleRequest(request, response);
-  });
-
-// start listening https Server
-httpsServer.listen(environment.httpsPort, function() {
-  console.log('Server listening on port: ' + environment.httpsPort + " ENV "
-                                           + environment.envMode);
-});
+// Init the server process
+init();
 
 /*
  * THis function handles all requests coming to server.
